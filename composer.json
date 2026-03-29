@@ -1,0 +1,22 @@
+{
+    "name": "lxrootard/jeedom-tools",
+    "description": "Jeedom tools",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "lxrootard"
+        }
+    ],
+    "autoload": {
+        "psr-0": { "jeedomtools\\MQTTClient" : "src/" }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {},
+        "platform": {
+            "php": "7.4"
+        }
+    }
+}
