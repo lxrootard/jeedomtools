@@ -75,7 +75,7 @@ class MQTTClient {
     $cmd .= ' --apikey ' . jeedom::getApiKey($this->_class);
     $cmd .= ' --cycle 1';
     $cmd .= ' --pid ' . jeedom::getTmpFolder($this->_class) . '/mqttDeamon.pid';
-    log::add($class, 'info',$this->_class . 'd started with command: ' . $cmd);
+    log::add($this->_class, 'info',$this->_class . 'd started with command: ' . $cmd);
     exec($cmd . ' >> ' . log::getPathToLog($this->_class . 'd') . ' 2>&1 &');
   }
 
