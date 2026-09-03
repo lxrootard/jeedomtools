@@ -26,6 +26,7 @@ use \config as config;
 use \system as system;
 use \network as network;
 use \com_http as com_http;
+use \Exception as Exception;
 
 class MQTTClient {
 
@@ -33,6 +34,35 @@ class MQTTClient {
 
   public function __construct($name) {
     $this->_class = $name;
+  }
+
+  /* Les settings du demon vivaient uniquement dans le cache Jeedom, qui est
+   * volatil (cache::flush, purge, expiration). Le demon, lui, continue de
+   * tourner : on en garde une copie durable en configuration pour pouvoir se
+   * reparer tout seul au lieu de casser silencieusement tous les envois. */
+  private function saveSettings($mqttSettings) {
+    cache::set($this->_class . '::settings', $mqttSettings);
+    config::save('mqttDeamonSettings', json_encode($mqttSettings), $this->_class);
+  }
+
+  private function forgetSettings() {
+    cache::delete($this->_class . '::settings');
+    config::remove('mqttDeamonSettings', $this->_class);
+  }
+
+  private function getSettings() {
+    $settings = cache::byKey($this->_class . '::settings')->getValue();
+    if (is_array($settings))
+	return $settings;
+    /* config::byKey() decode deja le JSON, mais on reste tolerant */
+    $settings = config::byKey('mqttDeamonSettings', $this->_class, array());
+    if (is_string($settings))
+	$settings = json_decode($settings, true);
+    if (! is_array($settings) || empty($settings))
+	return null;
+    log::add($this->_class, 'info', 'settings du demon absents du cache, restauration depuis la configuration');
+    cache::set($this->_class . '::settings', $settings);
+    return $settings;
   }
 
   public function stop() {
@@ -44,7 +74,7 @@ class MQTTClient {
     }
     system::kill($this->_class . 'd.js');
     system::fuserk(config::byKey('socketport', $this->_class));
-    cache::delete ($this->_class . '::settings');
+    $this->forgetSettings();
     sleep(1);
     log::add($this->_class, 'debug', $this->_class .'d stopped');
   }
@@ -52,7 +82,7 @@ class MQTTClient {
   public function start($mqttSettings) {
     if (! is_array($mqttSettings))
 	throw new Exception("les settings du deamon doivent être renseignés");
-    cache::set($this->_class . '::settings', $mqttSettings);
+    $this->saveSettings($mqttSettings);
 
     log::add($this->_class, 'debug', 'starting ' . $this->_class.'d with settings: ' . json_encode($mqttSettings));
     $cbclass = '/core/php/' . $mqttSettings['cbclass'] . '.php';
@@ -81,9 +111,11 @@ class MQTTClient {
 
   public function isRunning () {
     $pid_file = jeedom::getTmpFolder($this->_class) . '/mqttDeamon.pid';
+    if (! file_exists($pid_file))
+	return false;
     $pid = trim(file_get_contents($pid_file));
 //    log::add($this->_class, 'debug', '[' . __FUNCTION__ . ']  pid=' . $pid . ' pidfile=' . $pid_file);
-    if (file_exists($pid_file) && $pid) {
+    if ($pid) {
 	if (@posix_getsid((int) $pid))
 	    return true;
         else
@@ -97,7 +129,7 @@ class MQTTClient {
 	$message = json_encode($message);
 
     log::add($this->_class, 'debug', '[' . __FUNCTION__ . '] action: ' . $action. ' topic: '. $topic . ' message: ' . $message);
-    $mqttSettings = cache::byKey($this->_class . '::settings')->getValue();
+    $mqttSettings = $this->getSettings();
     if (! is_array($mqttSettings))
 	throw new Exception("les settings du deamon doivent être renseignés");
 
@@ -117,7 +149,7 @@ class MQTTClient {
         $result = json_decode($httpReq->exec(60,3), true);
     }
     log::add($this->_class, 'debug', '[' . __FUNCTION__ . '] result: ' . json_encode($result));
-    if ($result['state'] != 'ok')
+    if (! is_array($result) || ! isset($result['state']) || $result['state'] != 'ok')
 	throw new Exception(json_encode($result));
   }
 }
