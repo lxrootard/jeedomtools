@@ -21,11 +21,11 @@ require_once '/var/www/html/core/php/core.inc.php';
 
 use \log as log;
 use \jeedom as jeedom;
-use \cache as cache;
 use \config as config;
 use \system as system;
 use \network as network;
 use \com_http as com_http;
+use \Exception as Exception;
 
 class MQTTClient {
 
@@ -44,7 +44,7 @@ class MQTTClient {
     }
     system::kill($this->_class . 'd.js');
     system::fuserk(config::byKey('socketport', $this->_class));
-    cache::delete ($this->_class . '::settings');
+    //config::remove('mqtt', $this->_class);
     sleep(1);
     log::add($this->_class, 'debug', $this->_class .'d stopped');
   }
@@ -52,7 +52,10 @@ class MQTTClient {
   public function start($mqttSettings) {
     if (! is_array($mqttSettings))
 	throw new Exception("les settings du deamon doivent être renseignés");
-    cache::set($this->_class . '::settings', $mqttSettings);
+
+    $prev = config::byKey('mqtt', $this->_class, array());
+    if (empty($prev))
+	config::save('mqtt', json_encode($mqttSettings), $this->_class);
 
     log::add($this->_class, 'debug', 'starting ' . $this->_class.'d with settings: ' . json_encode($mqttSettings));
     $cbclass = '/core/php/' . $mqttSettings['cbclass'] . '.php';
@@ -97,8 +100,9 @@ class MQTTClient {
 	$message = json_encode($message);
 
     log::add($this->_class, 'debug', '[' . __FUNCTION__ . '] action: ' . $action. ' topic: '. $topic . ' message: ' . $message);
-    $mqttSettings = cache::byKey($this->_class . '::settings')->getValue();
-    if (! is_array($mqttSettings))
+
+    $mqttSettings = config::byKey('mqtt', $this->_class, array());
+    if (empty($mqttSettings))
 	throw new Exception("les settings du deamon doivent être renseignés");
 
     if (($action != 'addTopic') && ($action != 'removeTopic') && ($action != 'publish'))
